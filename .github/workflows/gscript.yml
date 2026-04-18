@@ -1,32 +1,91 @@
-name: Label & comment issues #the name of the workflow
-on: # This action will trigger when an issue is reopened or opened.
+name: Label & comment issues
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
   issues:
     types:
-      - reopened
       - opened
-jobs: # The jobs that run in this workflow
-  label_issues: # the first job is named as label_issues
-    runs-on: ubuntu-latest # This job will run on the latest version of Ubuntu.
-    permissions: # This job requires write access to issues in order to add labels and comment.
+      - reopened
+      - closed
+
+  pull_request:
+    types:
+      - opened
+
+jobs:
+  label_issues:
+    if: github.event_name == 'issues' && (github.event.action == 'opened' || github.event.action == 'reopened')
+    runs-on: ubuntu-latest
+
+    permissions:
       issues: write
-    steps: # The "steps" section contains the individual tasks that will be performed in this job.
-      - name: attach label to issues # The name of the step
-        uses: actions/github-script@v6 # This step uses the "actions/github-script" action to execute a script that adds labels to the issue.
+
+    steps:
+      - name: Attach label to issues
+        uses: actions/github-script@v8
         with:
-          script: | # The script calls the GitHub REST API to add labels to the issue.
-            github.rest.issues.addLabels({
+          script: |
+            await github.rest.issues.addLabels({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               labels: ["issue", "fix"]
             })
-      - name: Comment on new issue #this is another step that comments on the issue 
-        uses: peter-evans/create-or-update-comment@v1 # This step uses the "peter-evans/create-or-update-comment" action to create or update a comment on the issue.
+
+      - name: Comment on new issue
+        uses: peter-evans/create-or-update-comment@v4
         with:
-          issue-number: ${{ github.event.issue.number }} # The issue number is obtained from the context of the event that triggered the action.
-          body: | # The body of the comment is a message thanking the user for opening the issue.
-           Thanks for opening this issue! We'll take a look as soon as possible.
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            Thanks for opening this issue! We'll take a look as soon as possible.
 
-# Comment on when an issue is closed
+  closed_issue_comment:
+    if: github.event_name == 'issues' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
 
-# Comment on when an users opens the first pull request 
+    permissions:
+      issues: write
+
+    steps:
+      - name: Comment when issue is closed
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            The issue is now resolved.
+
+  first_pr_comment:
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+
+    permissions:
+      pull-requests: read
+      issues: write
+
+    steps:
+      - name: Check if this is the user's first PR
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const author = context.payload.pull_request.user.login;
+
+            const pulls = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "all"
+            });
+
+            const userPRs = pulls.data.filter(
+              pr => pr.user.login === author
+            );
+
+            if (userPRs.length === 1) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: `🎉 Congratulations @${author} on opening your first pull request!`
+              });
+            }
