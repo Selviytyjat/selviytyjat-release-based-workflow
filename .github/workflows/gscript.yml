@@ -35,7 +35,7 @@ jobs:
             })
 
       - name: Comment on new issue
-        uses: peter-evans/create-or-update-comment@v4
+        uses: peter-evans/create-or-update-comment@v5
         with:
           issue-number: ${{ github.event.issue.number }}
           body: |
@@ -50,7 +50,7 @@ jobs:
 
     steps:
       - name: Comment when issue is closed
-        uses: peter-evans/create-or-update-comment@v4
+        uses: peter-evans/create-or-update-comment@v5
         with:
           issue-number: ${{ github.event.issue.number }}
           body: |
